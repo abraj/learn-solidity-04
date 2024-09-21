@@ -20,9 +20,10 @@ contract Raffle {
 
   function enterRaffle() public payable {
     // require(msg.value >= i_entranceFee, "Not enough ETH sent!");
-    if (msg.value < i_entranceFee) {
-      revert Raffle__NotEnoughEthSent();
-    }
+    // if (msg.value < i_entranceFee) {
+    //   revert Raffle__NotEnoughEthSent();
+    // }
+    require(msg.value >= i_entranceFee, Raffle__NotEnoughEthSent());
   }
 
   function pickWinner() public { }
