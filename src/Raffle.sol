@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// pragma solidity 0.8.19;
-pragma solidity 0.8.26; // Custom errors in `require()`
+pragma solidity 0.8.19;
+// pragma solidity 0.8.26; // Custom errors in `require()`
 
 /**
  * @title A sample Raffle contract
@@ -20,10 +20,10 @@ contract Raffle {
 
   function enterRaffle() public payable {
     // require(msg.value >= i_entranceFee, "Not enough ETH sent!");
-    // if (msg.value < i_entranceFee) {
-    //   revert Raffle__NotEnoughEthSent();
-    // }
-    require(msg.value >= i_entranceFee, Raffle__NotEnoughEthSent());
+    if (msg.value < i_entranceFee) {
+      revert Raffle__NotEnoughEthSent();
+    }
+    // require(msg.value >= i_entranceFee, Raffle__NotEnoughEthSent());
   }
 
   function pickWinner() public { }
