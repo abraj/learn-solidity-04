@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 
 import { VRFConsumerBaseV2Plus } from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import { VRFV2PlusClient } from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import { Utils } from "./Utils.sol";
 
 /**
  * @title A sample Raffle contract
@@ -18,7 +19,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
   error Raffle__RaffleNotOpen();
   error Raffle__NoBalance();
   error Raffle__NoPlayers();
-  error Raffle__UpkeepNotNeeded(uint256 balance, uint256 playersLength, uint256 raffleState, uint256 timePassed);
+  error Raffle__UpkeepNotNeeded(string tag, uint256 raffleState, uint256 balance, uint256 playersLength);
 
   /* Type declarations */
   enum RaffleState {
@@ -107,7 +108,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
         extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({ nativePayment: ENABLE_NATIVE_PAYMENT }))
       })
     );
+
     s_recentRequestId = requestId;
+    // Redundant, since `VRFCoordinatorV2_5Mock` anyways emits `RandomWordsRequested` event
     emit RequestedRaffleWinner(requestId);
   }
 
@@ -166,8 +169,19 @@ contract Raffle is VRFConsumerBaseV2Plus {
     // Checks
     (bool upkeepNeeded,) = checkUpkeep("");
     if (!upkeepNeeded) {
-      uint256 timePassed = block.timestamp - s_lastTimestamp;
-      revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffleState), timePassed);
+      bool timeHasPassed = (block.timestamp - s_lastTimestamp) >= i_interval;
+      bool isOpen = s_raffleState == RaffleState.OPEN;
+      bool hasBalance = address(this).balance > 0;
+      bool hasPlayers = s_players.length > 0;
+      Utils utils = new Utils();
+      string[] memory args = new string[](4);
+      args[0] = utils.boolToString(timeHasPassed);
+      args[1] = utils.boolToString(isOpen);
+      args[2] = utils.boolToString(hasBalance);
+      args[3] = utils.boolToString(hasPlayers);
+      string memory tag = utils.concatenateStrings(args);
+
+      revert Raffle__UpkeepNotNeeded(tag, uint256(s_raffleState), address(this).balance, s_players.length);
     }
 
     // Effects
@@ -187,5 +201,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
   function getPlayer(uint256 index) external view returns (address) {
     return s_players[index];
+  }
+
+  function getRecentRequestId() external view returns (uint256) {
+    return s_recentRequestId;
   }
 }

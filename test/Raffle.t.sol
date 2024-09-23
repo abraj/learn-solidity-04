@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import { Test } from "forge-std/Test.sol";
+import { Test, console } from "forge-std/Test.sol";
+import { Vm } from "forge-std/Vm.sol";
 import { Raffle } from "src/Raffle.sol";
 import { DeployRaffle } from "script/Raffle.s.sol";
 import { HelperConfig } from "script/HelperConfig.s.sol";
@@ -75,19 +76,140 @@ contract RaffleTest is Test {
     raffle.enterRaffle{ value: entranceFee }();
   }
 
-  function test_DontAllowEntranceDuringCalculatingState() public {
-    // Arrange
+  modifier raffleEntered() {
     vm.prank(PLAYER);
     raffle.enterRaffle{ value: entranceFee }();
-
     vm.warp(block.timestamp + interval + 1);
     vm.roll(block.number + 1);
-    vm.prank(PLAYER);
+    _;
+  }
+
+  function test_DontAllowEntranceDuringCalculatingState() public raffleEntered {
+    // Arrange
+    // [modifier] raffleEntered
+    // vm.prank(PLAYER);  // not required
     raffle.performUpkeep("");
 
     // Act/Assert
     vm.expectRevert(Raffle.Raffle__RaffleNotOpen.selector);
     vm.prank(PLAYER);
     raffle.enterRaffle{ value: entranceFee }();
+  }
+
+  function test_CheckUpkeepReturnsFalseIfRaffleHasNoBalance() public {
+    // Arrange
+    vm.warp(block.timestamp + interval + 1);
+    vm.roll(block.number + 1);
+
+    // Act
+    (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+    // Assert
+    assert(!upkeepNeeded);
+  }
+
+  function test_CheckUpkeepReturnsFalseIfRaffleIsntOpen() public raffleEntered {
+    // Arrange
+    // [modifier] raffleEntered
+    // vm.prank(PLAYER);  // not required
+    raffle.performUpkeep("");
+
+    // Act
+    (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+    // Assert
+    assert(!upkeepNeeded);
+  }
+
+  function test_CheckUpkeepReturnsFalseIfEnoughTimeHasntPassed() public {
+    // Arrange
+    vm.prank(PLAYER);
+    raffle.enterRaffle{ value: entranceFee }();
+
+    // Act
+    (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+    // Assert
+    assert(!upkeepNeeded);
+  }
+
+  function test_CheckUpkeepReturnsTrueWhenParametersAreGood() public raffleEntered {
+    // Arrange
+    // [modifier] raffleEntered
+
+    // Act
+    (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+    // Assert
+    assert(upkeepNeeded);
+  }
+
+  function test_PerformUpkeepCanOnlyRunIfCheckUpkeepIsTrue() public raffleEntered {
+    // Arrange
+    // [modifier] raffleEntered
+
+    // [Optional]
+    (bool upkeepNeeded,) = raffle.checkUpkeep("");
+    assert(upkeepNeeded);
+
+    // Act / Assert
+    raffle.performUpkeep("");
+  }
+
+  function test_PerformUpkeepRevertsIfCheckUpkeepIsFalse1() public {
+    // Arrange
+    vm.prank(PLAYER);
+    raffle.enterRaffle{ value: entranceFee }();
+
+    string memory tag = "0111";
+    uint256 raffleState = 0;
+    uint256 balance = 0.01 ether;
+    uint256 playersLength = 1;
+
+    // Act / Assert
+    vm.expectRevert(
+      abi.encodeWithSelector(Raffle.Raffle__UpkeepNotNeeded.selector, tag, raffleState, balance, playersLength)
+    );
+    raffle.performUpkeep("");
+  }
+
+  function test_PerformUpkeepRevertsIfCheckUpkeepIsFalse2() public {
+    // Arrange
+    vm.warp(block.timestamp + interval + 1);
+    vm.roll(block.number + 1);
+
+    string memory tag = "1100";
+    uint256 raffleState = 0;
+    uint256 balance = 0;
+    uint256 playersLength = 0;
+
+    // Act / Assert
+    vm.expectRevert(
+      abi.encodeWithSelector(Raffle.Raffle__UpkeepNotNeeded.selector, tag, raffleState, balance, playersLength)
+    );
+    raffle.performUpkeep("");
+  }
+
+  function test_PerformUpkeepUpdatesRaffleStateAndEmitsRequestId() public raffleEntered {
+    // Arrange
+    // [modifier] raffleEntered
+
+    // Act
+    vm.recordLogs();
+    raffle.performUpkeep("");
+
+    // Assert
+    Vm.Log[] memory entries = vm.getRecordedLogs();
+    Vm.Log memory logEntry;
+    for (uint256 i = 0; i < entries.length; i++) {
+      if (entries[i].emitter == address(raffle)) {
+        logEntry = entries[i];
+        break;
+      }
+    }
+    bytes32 requestId = logEntry.topics[1];
+    assert(uint256(requestId) > 0);
+    assert(raffle.getRecentRequestId() == uint256(requestId));
+    assert(raffle.getRaffleState() == Raffle.RaffleState.CALCULATING);
   }
 }
