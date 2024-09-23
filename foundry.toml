@@ -12,6 +12,9 @@ fs_permissions = [
 ]
 # via_ir = true
 
+[fuzz]
+runs = 256
+
 [fmt]
 # line_length = 100
 tab_width = 2
