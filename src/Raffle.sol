@@ -18,7 +18,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
   error Raffle__RaffleNotOpen();
   error Raffle__NoBalance();
   error Raffle__NoPlayers();
-  error Raffle_UpkeepNotNeeded(uint256 balance, uint256 playersLength, uint256 raffleState, uint256 timePassed);
+  error Raffle__UpkeepNotNeeded(uint256 balance, uint256 playersLength, uint256 raffleState, uint256 timePassed);
 
   /* Type declarations */
   enum RaffleState {
@@ -82,7 +82,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
       revert Raffle__RaffleNotOpen();
     }
 
-    // Interactions
+    // Effects
     s_players.push(payable(msg.sender));
     emit RaffleEntered(msg.sender);
   }
@@ -167,7 +167,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     (bool upkeepNeeded,) = checkUpkeep("");
     if (!upkeepNeeded) {
       uint256 timePassed = block.timestamp - s_lastTimestamp;
-      revert Raffle_UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffleState), timePassed);
+      revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffleState), timePassed);
     }
 
     // Effects
@@ -179,5 +179,13 @@ contract Raffle is VRFConsumerBaseV2Plus {
    */
   function getEntranceFee() external view returns (uint256) {
     return i_entranceFee;
+  }
+
+  function getRaffleState() external view returns (RaffleState) {
+    return s_raffleState;
+  }
+
+  function getPlayer(uint256 index) external view returns (address) {
+    return s_players[index];
   }
 }
