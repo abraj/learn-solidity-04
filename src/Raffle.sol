@@ -37,15 +37,16 @@ contract Raffle is VRFConsumerBaseV2Plus {
   // @dev The duration of the lottery in seconds
   uint256 private immutable i_interval;
   // @dev see https://docs.chain.link/docs/vrf/v2-5/supported-networks
-  bytes32 private immutable i_keyHash;
+  bytes32 private immutable i_gasLane;
   uint256 private immutable i_subscriptionId;
   uint32 private immutable i_callbackGasLimit;
 
   address payable[] private s_players;
   uint256 private s_lastTimestamp;
-  uint256 private s_recentRequestId;
-  address private s_recentWinner;
   RaffleState private s_raffleState;
+  address private s_recentWinner;
+  uint256 private s_recentRequestId;
+  uint256 public s_recentRandomNumber;
 
   /* Events */
   event RaffleEntered(address indexed player);
@@ -64,7 +65,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
   ) VRFConsumerBaseV2Plus(vrfCoordinator) {
     i_entranceFee = entranceFee;
     i_interval = interval;
-    i_keyHash = gasLane;
+    i_gasLane = gasLane;
     i_subscriptionId = subscriptionId;
     i_callbackGasLimit = callbackGasLimit;
 
@@ -100,7 +101,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     // Will revert if subscription is not set and funded.
     uint256 requestId = s_vrfCoordinator.requestRandomWords(
       VRFV2PlusClient.RandomWordsRequest({
-        keyHash: i_keyHash,
+        keyHash: i_gasLane,
         subId: i_subscriptionId,
         requestConfirmations: REQUEST_CONFIRMATIONS,
         callbackGasLimit: i_callbackGasLimit,
@@ -114,12 +115,16 @@ contract Raffle is VRFConsumerBaseV2Plus {
     emit RequestedRaffleWinner(requestId);
   }
 
+  /**
+   * @dev marked as `internal` since it's being called by another wrapper function
+   * defined here (in VRF consumer) which can only be invoked by a VRF subscription.
+   */
   function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
     // Checks
     // NOTE: `assert` consumes all remaining gas if it fails
     assert(s_recentRequestId == requestId);
     assert(block.timestamp - s_lastTimestamp >= i_interval);
-    assert(s_raffleState == RaffleState.OPEN);
+    assert(s_raffleState == RaffleState.CALCULATING);
     assert(address(this).balance > 0);
     assert(s_players.length > 0);
 
@@ -127,7 +132,10 @@ contract Raffle is VRFConsumerBaseV2Plus {
     uint256 randomNumber = randomWords[0];
     uint256 winnerIndex = randomNumber % s_players.length;
     address payable recentWinner = s_players[winnerIndex];
+
+    s_recentRandomNumber = randomNumber;
     s_recentWinner = recentWinner;
+    s_recentRequestId = 0;
     s_players = new address payable[](0);
     s_lastTimestamp = block.timestamp;
     s_raffleState = RaffleState.OPEN;
@@ -191,10 +199,6 @@ contract Raffle is VRFConsumerBaseV2Plus {
   /**
    * Getter functions
    */
-  function getEntranceFee() external view returns (uint256) {
-    return i_entranceFee;
-  }
-
   function getRaffleState() external view returns (RaffleState) {
     return s_raffleState;
   }
@@ -203,7 +207,23 @@ contract Raffle is VRFConsumerBaseV2Plus {
     return s_players[index];
   }
 
+  function getPlayersLength() external view returns (uint256) {
+    return s_players.length;
+  }
+
   function getRecentRequestId() external view returns (uint256) {
     return s_recentRequestId;
+  }
+
+  function getLastTimestamp() external view returns (uint256) {
+    return s_lastTimestamp;
+  }
+
+  function getRecentWinner() external view returns (address) {
+    return s_recentWinner;
+  }
+
+  function getRecentRandomNumber() public view returns (uint256) {
+    return s_recentRandomNumber;
   }
 }
