@@ -84,6 +84,7 @@ contract HelperConfig is Script, CodeConstants {
       subscriptionId: 0,
       link: address(linkToken),
       account: DEFAULT_SENDER // 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38 (see lib/forge-std/src/Base.sol)
+        // account: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
      });
     return localNetworkConfig;
   }
